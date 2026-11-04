@@ -1,0 +1,175 @@
+/*
+ * UI キット（画面の共通部品）
+ *
+ * AI社員オフィスの画面が使う配色トークンと部品。ほかの管理画面からも読み込んで同じ見た目にできる。
+ * 既定は OS の明暗設定に従う。<html data-theme="dark"> / "light" で固定もできる。
+ * 色はすべてトークン（--ce-*）で持ち、部品側に色を直書きしない。
+ */
+
+:root {
+  --ce-bg: #f5f6fa;
+  --ce-surface: #ffffff;
+  --ce-surface-2: #eef0f7;
+  --ce-sunken: #eceef5;
+  --ce-border: #dcdfeb;
+  --ce-row-border: #e9ebf3;
+  --ce-hover: #f1f2fa;
+  --ce-text: #232735;
+  --ce-text-strong: #0c0e16;
+  --ce-muted: #5a6072;
+  --ce-faint: #80869a;
+  --ce-accent: #4f46e5;
+  --ce-accent-soft: #e6e5fb;
+  --ce-accent-text: #ffffff;
+  --ce-ok: #059669;
+  --ce-ok-bg: #d8f5e8;
+  --ce-ok-fg: #046c4e;
+  --ce-bad: #dc2626;
+  --ce-bad-bg: #fde4e4;
+  --ce-bad-fg: #a61b1b;
+  --ce-bad-border: #f3b4b4;
+  --ce-warn: #d97706;
+  --ce-warn-bg: #fdf0d2;
+  --ce-warn-fg: #92510a;
+  --ce-info-bg: #e6e5fb;
+  --ce-info-fg: #3b34b8;
+  --ce-neutral-bg: #e5e7ee;
+  --ce-neutral-fg: #4b5163;
+  --ce-radius: 10px;
+  --ce-radius-sm: 6px;
+  --ce-font: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Segoe UI", "Noto Sans JP", sans-serif;
+  --ce-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ce-bg: #0f1117;
+    --ce-surface: #1a1d2e;
+    --ce-surface-2: #2d3250;
+    --ce-sunken: #0d0f1a;
+    --ce-border: #2d3250;
+    --ce-row-border: #252a3e;
+    --ce-hover: #222640;
+    --ce-text: #e0e0e0;
+    --ce-text-strong: #ffffff;
+    --ce-muted: #9ca3af;
+    --ce-faint: #6b7280;
+    --ce-accent: #6366f1;
+    --ce-accent-soft: #262a4d;
+    --ce-accent-text: #ffffff;
+    --ce-ok: #10b981;
+    --ce-ok-bg: #064e3b;
+    --ce-ok-fg: #34d399;
+    --ce-bad: #ef4444;
+    --ce-bad-bg: #450a0a;
+    --ce-bad-fg: #f87171;
+    --ce-bad-border: #7f1d1d;
+    --ce-warn: #f59e0b;
+    --ce-warn-bg: #3d2a05;
+    --ce-warn-fg: #fbbf24;
+    --ce-info-bg: #312e81;
+    --ce-info-fg: #a5b4fc;
+    --ce-neutral-bg: #374151;
+    --ce-neutral-fg: #9ca3af;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --ce-bg: #0f1117;
+  --ce-surface: #1a1d2e;
+  --ce-surface-2: #2d3250;
+  --ce-sunken: #0d0f1a;
+  --ce-border: #2d3250;
+  --ce-row-border: #252a3e;
+  --ce-hover: #222640;
+  --ce-text: #e0e0e0;
+  --ce-text-strong: #ffffff;
+  --ce-muted: #9ca3af;
+  --ce-faint: #6b7280;
+  --ce-accent: #6366f1;
+  --ce-accent-soft: #262a4d;
+  --ce-accent-text: #ffffff;
+  --ce-ok: #10b981;
+  --ce-ok-bg: #064e3b;
+  --ce-ok-fg: #34d399;
+  --ce-bad: #ef4444;
+  --ce-bad-bg: #450a0a;
+  --ce-bad-fg: #f87171;
+  --ce-bad-border: #7f1d1d;
+  --ce-warn: #f59e0b;
+  --ce-warn-bg: #3d2a05;
+  --ce-warn-fg: #fbbf24;
+  --ce-info-bg: #312e81;
+  --ce-info-fg: #a5b4fc;
+  --ce-neutral-bg: #374151;
+  --ce-neutral-fg: #9ca3af;
+  color-scheme: dark;
+}
+
+/* ---- 土台 ---- */
+.ce-kit, .ce-kit * { box-sizing: border-box; }
+.ce-kit { margin: 0; font-family: var(--ce-font); background: var(--ce-bg); color: var(--ce-text); }
+
+/* ---- ヘッダー・タブ ---- */
+.ce-kit header { background: var(--ce-surface); padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; border-bottom: 1px solid var(--ce-border); }
+.ce-kit header h1 { font-size: 18px; color: var(--ce-text-strong); font-weight: 600; margin: 0; }
+.ce-kit header .hint { font-size: 11px; color: var(--ce-faint); }
+.ce-kit code { background: var(--ce-sunken); padding: 2px 6px; border-radius: 4px; color: var(--ce-muted); font-family: var(--ce-mono); font-size: .92em; }
+.ce-kit .tabs { display: flex; gap: 2px; background: var(--ce-surface); padding: 0 24px; border-bottom: 1px solid var(--ce-border); overflow-x: auto; }
+.ce-kit .tab { padding: 12px 20px; cursor: pointer; font-size: 13px; color: var(--ce-muted); border-bottom: 2px solid transparent; transition: color .2s, border-color .2s; white-space: nowrap; background: none; border-top: 0; border-left: 0; border-right: 0; font-family: inherit; }
+.ce-kit .tab.active { color: var(--ce-text-strong); border-bottom-color: var(--ce-accent); }
+.ce-kit .tab:hover { color: var(--ce-text); }
+.ce-kit .tab:focus-visible { outline: 2px solid var(--ce-accent); outline-offset: -2px; }
+.ce-kit .panel { display: none; padding: 24px; }
+.ce-kit .panel.active { display: block; }
+.ce-kit h2 { font-size: 15px; color: var(--ce-text); margin: 0 0 16px; font-weight: 600; }
+
+/* ---- 数字カード ---- */
+.ce-kit .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.ce-kit .card { background: var(--ce-surface); border: 1px solid var(--ce-border); border-radius: var(--ce-radius); padding: 20px; min-width: 0; }
+.ce-kit .card .label { font-size: 12px; color: var(--ce-muted); margin-bottom: 8px; }
+.ce-kit .card .value { font-size: 32px; font-weight: 700; color: var(--ce-text-strong); font-variant-numeric: tabular-nums; }
+.ce-kit .card .sub { font-size: 11px; color: var(--ce-faint); margin-top: 4px; }
+.ce-kit .card.green  { border-top: 3px solid var(--ce-ok); }
+.ce-kit .card.red    { border-top: 3px solid var(--ce-bad); }
+.ce-kit .card.blue   { border-top: 3px solid var(--ce-accent); }
+.ce-kit .card.yellow { border-top: 3px solid var(--ce-warn); }
+.ce-kit .card.gray   { border-top: 3px solid var(--ce-faint); }
+
+/* ---- 表 ---- */
+.ce-kit .table-wrap { overflow-x: auto; border-radius: var(--ce-radius); }
+.ce-kit table { width: 100%; border-collapse: collapse; background: var(--ce-surface); border-radius: var(--ce-radius); overflow: hidden; }
+.ce-kit th { background: var(--ce-surface-2); padding: 10px 14px; font-size: 12px; color: var(--ce-muted); text-align: left; font-weight: 500; }
+.ce-kit td { padding: 10px 14px; font-size: 13px; border-bottom: 1px solid var(--ce-row-border); }
+.ce-kit tr:last-child td { border-bottom: none; }
+.ce-kit tr:hover td { background: var(--ce-hover); }
+
+/* ---- 状態バッジ（状態は色と文字の両方で出す） ---- */
+.ce-kit .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 500; white-space: nowrap; }
+.ce-kit .badge-ok      { background: var(--ce-ok-bg); color: var(--ce-ok-fg); }
+.ce-kit .badge-fail    { background: var(--ce-bad-bg); color: var(--ce-bad-fg); }
+.ce-kit .badge-warn    { background: var(--ce-warn-bg); color: var(--ce-warn-fg); }
+.ce-kit .badge-info    { background: var(--ce-info-bg); color: var(--ce-info-fg); }
+.ce-kit .badge-unknown { background: var(--ce-neutral-bg); color: var(--ce-neutral-fg); }
+
+/* ---- ボタン ---- */
+.ce-kit .refresh-btn, .ce-kit .btn { background: var(--ce-surface-2); border: 1px solid transparent; color: var(--ce-muted); padding: 6px 14px; border-radius: var(--ce-radius-sm); cursor: pointer; font-size: 12px; font-family: inherit; }
+.ce-kit .refresh-btn:hover, .ce-kit .btn:hover { color: var(--ce-text-strong); border-color: var(--ce-border); }
+.ce-kit .btn-primary { background: var(--ce-accent); color: var(--ce-accent-text); }
+.ce-kit .btn-primary:hover { color: var(--ce-accent-text); filter: brightness(1.08); }
+.ce-kit .btn-ok { background: var(--ce-ok-bg); color: var(--ce-ok-fg); }
+.ce-kit .btn-danger { background: var(--ce-bad-bg); color: var(--ce-bad-fg); }
+.ce-kit .btn:disabled { opacity: .5; cursor: default; }
+.ce-kit .btn:focus-visible, .ce-kit .refresh-btn:focus-visible { outline: 2px solid var(--ce-accent); outline-offset: 2px; }
+
+/* ---- 囲み ---- */
+.ce-kit .error-box { background: var(--ce-bad-bg); border: 1px solid var(--ce-bad-border); border-radius: 8px; padding: 16px; color: var(--ce-bad-fg); font-size: 13px; }
+.ce-kit .info-box { background: var(--ce-surface); border: 1px solid var(--ce-border); border-radius: 8px; padding: 20px; }
+.ce-kit .loading { color: var(--ce-faint); font-size: 13px; padding: 20px; text-align: center; }
+.ce-kit .log-box { background: var(--ce-sunken); border: 1px solid var(--ce-border); border-radius: 8px; padding: 16px; font-family: var(--ce-mono); font-size: 12px; color: var(--ce-muted); max-height: 400px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; }
+
+/* ---- 上部アラート（失敗ジョブ・承認待ちなど「今見るべきもの」） ---- */
+.ce-kit .alert { border-radius: var(--ce-radius); padding: 12px 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 13px; }
+.ce-kit .alert-warn { background: var(--ce-warn-bg); color: var(--ce-warn-fg); }
+.ce-kit .alert-bad { background: var(--ce-bad-bg); color: var(--ce-bad-fg); border: 1px solid var(--ce-bad-border); }

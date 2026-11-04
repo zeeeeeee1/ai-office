@@ -1,0 +1,11 @@
+{
+  "_comment": "作業ディレクトリの config/ai_office.json に置く設定の例。すべて省略できる。",
+  "bots_file": "config/ai_office_bots.json",
+  "workspace_dir": "output/ai-office",
+  "house_rules": [
+    "公開・配信の前に、このプロジェクトのチェックスクリプトを通す。"
+  ],
+  "runner_command": ["claude", "-p", "--output-format", "text"],
+  "runner_env": {},
+  "notify_command": ["python3", "scripts/notify.py", "--text"]
+}

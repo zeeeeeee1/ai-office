@@ -1,0 +1,20 @@
+# 会話・仕事の記録（手元だけに置く）
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# 認証情報・個人設定は絶対にコミットしない
+.env
+.env.*
+*.pem
+*.key
+config/ai_office.json
+ai_office.json
+
+# 生成物・キャッシュ
+output/
+__pycache__/
+*.pyc
+.pytest_cache/
+.DS_Store
