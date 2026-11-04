@@ -94,6 +94,8 @@ body.ce-kit { min-height: 100%; }
 .ao-sec p { margin: 0; font-size: 13px; line-height: 1.7; color: var(--ce-text); white-space: pre-wrap; }
 .ao-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .ao-chip { font-family: var(--ce-mono); font-size: 11px; padding: 3px 8px; border-radius: 6px; background: var(--ce-sunken); color: var(--ce-muted); }
+.ao-chip.external { background: var(--ce-info-bg); color: var(--ce-info-fg); }
+.ao-chip.missing { background: var(--ce-warn-bg); color: var(--ce-warn-fg); }
 .ao-mem { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .ao-mem li { font-size: 12.5px; line-height: 1.6; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: start; padding: 6px 8px; border-radius: 6px; background: var(--ce-sunken); }
 .ao-x { background: none; border: none; color: var(--ce-faint); cursor: pointer; font-size: 14px; line-height: 1; padding: 2px 4px; border-radius: 4px; }

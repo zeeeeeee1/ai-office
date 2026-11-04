@@ -69,6 +69,28 @@ python3 ai-office/office.py serve
 | `runner_command` | LLM CLI の起動コマンド（指示書は標準入力）。先頭のコマンドが見つからなければ自動選択に戻る |
 | `runner_env` | CLI に渡す環境変数。`{workdir}` `{timeout}` は置き換わる |
 | `notify_command` | 通知コマンド。本文は最後の引数として渡る（Slack・メールなどへの送り方はプロジェクト側で用意する） |
+| `skill_dirs` | 自分のスキルを探すフォルダ（既定 `skills/` と `.claude/skills/`） |
+| `external_skill_dirs` | もらったスキルを置くフォルダ（既定はこのリポジトリの `skills/`） |
+
+## もらったスキルを使う
+
+ほかの人からもらったスキルは、`skills/` フォルダに入れます（中身は git に入らないので、誤って公開されません）。
+
+```
+skills/
+└── <スキル名>/
+    └── SKILL.md
+```
+
+社員の「使うスキル」にその名前を書くと使えるようになります。画面では 📦 が付き、見つからないスキルには ⚠ が付きます。
+自分のスキル（作業ディレクトリの `skills/` と `.claude/skills/`）に同じ名前があれば、そちらを先に使います。
+置き場所は `config/ai_office.json` の `skill_dirs`（自分のスキル）と `external_skill_dirs`（もらったスキル）で変えられます。
+
+```bash
+python3 office.py skills
+```
+
+で、探す場所と見つかったスキルを確かめられます。入れる前には中身を読んで、知らない送信先へのアクセスや削除などの危ない操作が無いかを確かめてください。
 
 ## 画面を開かずに操作する
 
@@ -125,6 +147,7 @@ AI社員は返事の最後に ` ```ai-office ` の JSON ブロックを書く決
 |---|---|
 | `ai_office/` | 本体（`store.py` データ／`office.py` 受付・承認・ワーカー／`runner.py` CLI の起動と停止／`protocol.py` 指示書と返事の読み取り／`schedule.py` 定期の仕事／`server.py` 画面と API／`service.py` 常駐／`config.py` 作業ディレクトリと設定） |
 | `web/` | 画面（`index.html` / `app.js` / `app.css`）と共通部品 `web/ui-kit/`（配色トークン・タブ・カード・表・バッジ。ほかの管理画面からも読み込める） |
+| `skills/` | もらったスキルの置き場所（中身は git に入らない） |
 | `examples/` | 初期メンバーと設定ファイルの例 |
 | `data/office.db` | 会話・仕事の記録（SQLite・git 管理外） |
 | `tests/` | テスト（`python3 -m pytest tests`） |

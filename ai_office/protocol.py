@@ -26,10 +26,19 @@ APPROVAL_KINDS = {
 _FENCE_RE = re.compile(r"```" + RESULT_FENCE + r"\s*\n(.*?)\n```", re.S)
 
 
+def _skill_line(info: dict) -> str:
+    if not info.get("path"):
+        return f"- `{info['name']}`（見つからない。使わずに進め、返事でそのことを伝える）"
+    label = "もらったスキル" if info.get("kind") == "external" else "このプロジェクトのスキル"
+    return f"- `{info['name']}` → `{info['path']}`（{label}。使う前にこのファイルを読む）"
+
+
 def build_prompt(bot: dict, task: dict, memories: list[dict], history: list[dict], workdir: str,
-                 workspace: str, house_rules: Optional[list] = None) -> str:
-    skills = bot.get("skills") or []
-    skill_lines = "\n".join(f"- `{s}`（`skills/{s}/SKILL.md` か `.claude/skills/{s}/SKILL.md`）" for s in skills) \
+                 workspace: str, house_rules: Optional[list] = None,
+                 skill_info: Optional[list] = None) -> str:
+    if skill_info is None:  # 場所が分からないときは名前だけ渡す
+        skill_info = [{"name": s, "path": f"skills/{s}/SKILL.md", "kind": "project"} for s in bot.get("skills") or []]
+    skill_lines = "\n".join(_skill_line(i) for i in skill_info) \
         or "- 指定なし（作業ディレクトリの案内から必要なものを探す）"
     memory_lines = "\n".join(f"- {m['text']}" for m in memories) or "- まだ無し"
     convo = []
