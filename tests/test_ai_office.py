@@ -479,3 +479,56 @@ def test_cli_lists_skills(tmp_path, monkeypatch, capsys):
     assert cli.main(["--workdir", str(tmp_path), "skills"]) == 0
     out = capsys.readouterr().out
     assert "mine" in out and "もらったスキルを置く場所" in out
+
+
+# ---------- 作業ディレクトリが広すぎないか ----------
+def _blocked(path, **kw):
+    from ai_office import config
+    try:
+        config.check_workdir(path, **kw)
+    except config.WorkdirTooBroad as e:
+        return e
+    return None
+
+
+def test_workdir_guard_hard_blocks_root_home_and_system(tmp_path):
+    home = tmp_path / "home" / "me"
+    home.mkdir(parents=True)
+    for p in ("/", str(home), str(home.parent), "/usr/local", "/etc", "/tmp"):
+        e = _blocked(p, home=home, allow_broad=True)
+        assert e is not None and not e.overridable, p
+
+
+def test_workdir_guard_soft_blocks_broad_folders(tmp_path):
+    home = tmp_path / "home" / "me"
+    (home / "Documents").mkdir(parents=True)
+    (home / "notes").mkdir()
+    e = _blocked(home / "Documents", home=home)
+    assert e is not None and e.overridable and "Documents" in e.reason
+    e = _blocked(home / "notes", home=home)  # プロジェクトの目印が無い
+    assert e is not None and e.overridable and "目印" in e.reason
+    assert _blocked(home / "notes", home=home, allow_broad=True) is None
+
+
+def test_workdir_guard_allows_project_folders(tmp_path):
+    home = tmp_path / "home" / "me"
+    for name, marker in (("a", ".git"), ("b", "AGENTS.md"), ("c", "CLAUDE.md"), ("d", "config/ai_office.json")):
+        proj = home / "workspace" / name
+        (proj / marker).parent.mkdir(parents=True, exist_ok=True)
+        (proj / marker).mkdir() if marker == ".git" else (proj / marker).write_text("x")
+        assert _blocked(proj, home=home) is None, name
+    assert _blocked(ROOT) is None  # このリポジトリ自身（.git がある）
+
+
+def test_serve_refuses_broad_workdir_but_demo_and_flag_pass(tmp_path, monkeypatch, capsys):
+    from ai_office import __main__ as cli
+    plain = tmp_path / "plain"
+    plain.mkdir()
+    monkeypatch.setenv("AI_OFFICE_DB", str(tmp_path / "g.db"))
+    monkeypatch.delenv("AI_OFFICE_ALLOW_BROAD_WORKDIR", raising=False)
+    assert cli.main(["--workdir", str(plain), "serve"]) == 2
+    assert "広すぎる" in capsys.readouterr().err
+    assert cli.main(["--workdir", "/", "install-service", "--dry-run", "--allow-broad-workdir"]) == 2
+    assert cli._guard_workdir(cli.main.__globals__["argparse"].Namespace(workdir=str(plain), allow_broad_workdir=True)) == 0
+    assert cli.main(["--workdir", str(plain), "install-service", "--dry-run", "--allow-broad-workdir"]) == 0
+    assert "--allow-broad-workdir" in capsys.readouterr().out

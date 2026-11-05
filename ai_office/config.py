@@ -31,6 +31,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -149,3 +150,65 @@ def load(workdir: Path) -> HostConfig:
 def _path(workdir: Path, value) -> Path:
     p = Path(os.path.expanduser(str(value)))
     return p if p.is_absolute() else (workdir / p).resolve()
+
+
+# ---------- 作業ディレクトリが広すぎないか ----------
+# AI社員は作業ディレクトリの中を読み書きできる。広すぎる場所で動かすと、関係ないファイルまで触れてしまう。
+
+# 中に入るのも止める場所（OS の場所）。上書きできない
+SYSTEM_DIRS = ("/System", "/usr", "/bin", "/sbin", "/etc", "/var", "/private", "/Library", "/Applications",
+               "/opt", "/dev", "/proc", "/sys", "/boot", "/root", "/Volumes")
+# そのものだと止める、ホームの下のよくあるフォルダ（中のプロジェクトフォルダなら使える）
+HOME_BROAD_NAMES = ("Desktop", "Documents", "Downloads", "Library", "Pictures", "Movies", "Music", "Public",
+                    "Applications", "Dropbox", "Google Drive", "OneDrive", "iCloud Drive", "workspace", "src",
+                    "dev", "projects", "Projects", "code", "repos", "github")
+# プロジェクトのフォルダらしい目印。どれも無いフォルダは止める（上書きできる）
+PROJECT_MARKERS = (".git", "AGENTS.md", "CLAUDE.md", "config/ai_office.json", "ai_office.json")
+
+
+class WorkdirTooBroad(Exception):
+    """作業ディレクトリが広すぎる。overridable が True なら、わかったうえで許可できる。"""
+
+    def __init__(self, path: Path, reason: str, overridable: bool):
+        super().__init__(reason)
+        self.path, self.reason, self.overridable = path, reason, overridable
+
+    def message(self) -> str:
+        lines = [f"作業ディレクトリが広すぎるので止めました: {self.path}",
+                 f"  理由: {self.reason}",
+                 "  AI社員は作業ディレクトリの中を読み書きできます。プロジェクトのフォルダを --workdir で指定してください。"]
+        if self.overridable:
+            lines.append("  このフォルダで良いとわかっているなら --allow-broad-workdir を付けてください。")
+        return "\n".join(lines)
+
+
+def check_workdir(workdir: Path, allow_broad: bool = False, home: Optional[Path] = None) -> None:
+    """広すぎる作業ディレクトリなら WorkdirTooBroad を投げる。"""
+    p = Path(workdir).expanduser().resolve()
+    home = Path(home or Path.home()).expanduser().resolve()
+    root = Path(p.anchor or "/")
+
+    if p == root:
+        raise WorkdirTooBroad(p, "ディスク全体（ルート）です", overridable=False)
+    if p == home:
+        raise WorkdirTooBroad(p, "ホームフォルダ全体です", overridable=False)
+    if p in home.parents:
+        raise WorkdirTooBroad(p, "ホームフォルダより上の場所です（ほかの人のホームも入ります）", overridable=False)
+    temp_roots = {Path("/tmp"), Path("/tmp").resolve(), Path(tempfile.gettempdir()).resolve()}
+    if p in temp_roots:
+        raise WorkdirTooBroad(p, "一時ファイルの置き場所全体です", overridable=False)
+    in_home = home in p.parents
+    in_temp = any(t in p.parents for t in temp_roots)  # 一時フォルダの中の作業用フォルダは使える
+    for d in SYSTEM_DIRS:
+        sd = Path(d)
+        if (p == sd or sd in p.parents) and not (in_home or in_temp):
+            raise WorkdirTooBroad(p, f"OS が使う場所（{d}）です", overridable=False)
+
+    if allow_broad:
+        return
+    if p.parent == home and p.name in HOME_BROAD_NAMES:
+        raise WorkdirTooBroad(p, f"ホームの「{p.name}」フォルダ全体です（中のプロジェクトフォルダを指定してください）",
+                              overridable=True)
+    if not any((p / m).exists() for m in PROJECT_MARKERS):
+        raise WorkdirTooBroad(p, "プロジェクトのフォルダの目印（.git・AGENTS.md・CLAUDE.md・config/ai_office.json）が"
+                              "見つかりません", overridable=True)

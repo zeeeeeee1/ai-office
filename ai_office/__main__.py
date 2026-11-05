@@ -49,9 +49,22 @@ def _office(args) -> Office:
     return office
 
 
+def _guard_workdir(args) -> int:
+    """AI社員を動かす前に、作業ディレクトリが広すぎないか確かめる（止めたら 2 を返す）。"""
+    try:
+        config.check_workdir(_host(args).workdir, allow_broad=getattr(args, "allow_broad_workdir", False)
+                             or os.environ.get("AI_OFFICE_ALLOW_BROAD_WORKDIR") == "1")
+    except config.WorkdirTooBroad as e:
+        print("[ai-office] " + e.message(), file=sys.stderr)
+        return 2
+    return 0
+
+
 def cmd_serve(args) -> int:
     from .server import serve
 
+    if not args.demo and _guard_workdir(args):  # 練習モードはファイルに触らないので確かめない
+        return 2
     office = _office(args)
     if office.runner_mode == "none":
         print("[ai-office] AI社員を動かす CLI（claude / opencode）が見つかりません。"
@@ -112,7 +125,10 @@ def cmd_task_action(args) -> int:
 def cmd_install_service(args) -> int:
     from . import service
 
-    print(service.install(_host(args).workdir, port=args.port, load=args.load, dry_run=args.dry_run))
+    if _guard_workdir(args):
+        return 2
+    print(service.install(_host(args).workdir, port=args.port, load=args.load, dry_run=args.dry_run,
+                          allow_broad=args.allow_broad_workdir))
     return 0
 
 
@@ -131,6 +147,10 @@ def cmd_skills(args) -> int:
     print("もらったスキルを置く場所:")
     for d in host.external_skill_dirs:
         print(f"  {d}{'' if Path(d).is_dir() else '（無い）'}")
+    try:
+        config.check_workdir(host.workdir)
+    except config.WorkdirTooBroad as e:
+        print("⚠ " + e.message())
     found = host.list_skills()
     print(f"見つかったスキル: {len(found)} 個")
     for s in found:
@@ -156,6 +176,8 @@ def main(argv=None) -> int:
     s.add_argument("--port", type=int, default=int(os.environ.get("AI_OFFICE_PORT", "8765")))
     s.add_argument("--parallel", type=int, default=2, help="同時に動ける社員の数")
     s.add_argument("--demo", action="store_true", help="LLM を呼ばない練習モード")
+    s.add_argument("--allow-broad-workdir", action="store_true",
+                   help="プロジェクトの目印が無いフォルダでも動かす（ホーム全体・OS の場所はこれでも止まる）")
     s.set_defaults(fn=cmd_serve)
     s = sub.add_parser("seed", help="初期メンバーを入れる")
     s.add_argument("--demo", action="store_true")
@@ -175,6 +197,8 @@ def main(argv=None) -> int:
     s.add_argument("--port", type=int, default=8765)
     s.add_argument("--load", action="store_true", help="書き出したあと常駐を始める")
     s.add_argument("--dry-run", action="store_true", help="書き出さずに中身を表示")
+    s.add_argument("--allow-broad-workdir", action="store_true",
+                   help="プロジェクトの目印が無いフォルダでも常駐させる（ホーム全体・OS の場所はこれでも止まる）")
     s.set_defaults(fn=cmd_install_service)
     s = sub.add_parser("uninstall-service", help="常駐をやめて plist を外す")
     s.set_defaults(fn=cmd_uninstall_service)
