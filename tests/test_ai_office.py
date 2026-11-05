@@ -532,3 +532,115 @@ def test_serve_refuses_broad_workdir_but_demo_and_flag_pass(tmp_path, monkeypatc
     assert cli._guard_workdir(cli.main.__globals__["argparse"].Namespace(workdir=str(plain), allow_broad_workdir=True)) == 0
     assert cli.main(["--workdir", str(plain), "install-service", "--dry-run", "--allow-broad-workdir"]) == 0
     assert "--allow-broad-workdir" in capsys.readouterr().out
+
+
+# ---------- 外にある AI社員（staff_dirs）と手元だけの設定 ----------
+AGENT_MD = """---
+name: helper
+description: 調べものを手伝う担当
+model: claude-sonnet-test
+skills: [alpha, beta]
+---
+
+この本文は名簿にも指示書にも写さない（秘密の進め方）。
+"""
+
+
+def _staff_dir(tmp_path):
+    d = tmp_path / "staff-src"
+    d.mkdir()
+    (d / "helper.md").write_text(AGENT_MD, encoding="utf-8")
+    (d / "README.md").write_text("# 説明だけ", encoding="utf-8")
+    (d / "kana").mkdir()
+    (d / "kana" / "STAFF.md").write_text("# カナ\n本文", encoding="utf-8")
+    return d
+
+
+def test_discover_reads_headers_only(tmp_path):
+    from ai_office import staff
+    found = {f["id"]: f for f in staff.discover([_staff_dir(tmp_path)])}
+    assert set(found) == {"ext-helper", "ext-kana"}  # README は社員にしない
+    h = found["ext-helper"]
+    assert h["role"] == "調べものを手伝う担当" and h["model"] == "claude-sonnet-test" and h["skills"] == ["alpha", "beta"]
+    assert found["ext-kana"]["name"] == "kana" and found["ext-kana"]["model"] == ""
+
+
+def test_local_config_adds_staff_dirs_without_touching_the_repo(tmp_path, monkeypatch):
+    from ai_office import config
+    src = _staff_dir(tmp_path)
+    local = tmp_path / "home" / ".ai-office" / "config.json"
+    local.parent.mkdir(parents=True)
+    local.write_text(json.dumps({"staff_dirs": [str(src)], "external_skill_dirs": ["~/gift"]}))
+    monkeypatch.setenv("AI_OFFICE_LOCAL_CONFIG", str(local))
+    proj = tmp_path / "proj"
+    (proj / "config").mkdir(parents=True)
+    (proj / "config" / "ai_office.json").write_text(json.dumps({"house_rules": ["プロジェクトの決まり"]}))
+    host = config.load(proj)
+    assert host.staff_dirs == [src.resolve()]
+    assert Path("~/gift").expanduser() in host.external_skill_dirs and config.EXTERNAL_SKILLS_DIR in host.external_skill_dirs
+    assert host.house_rules == ["プロジェクトの決まり"] and len(host.sources) == 2
+
+
+def test_sync_staff_adds_updates_and_marks_missing(tmp_path):
+    from ai_office import config
+    from ai_office.office import sync_staff
+    src = _staff_dir(tmp_path)
+    host = config.HostConfig(workdir=tmp_path, staff_dirs=[src])
+    o = Office(Store(tmp_path / "st.db"), runner_mode="demo", host=host, notifier=None)
+    assert sorted(sync_staff(o)["added"]) == ["ext-helper", "ext-kana"]
+    bot = o.store.get_bot("ext-helper")
+    assert bot["source_path"] == str((src / "helper.md").resolve()) and bot["instructions"] == ""
+    o.store.add_memories("ext-helper", ["結論から書く"])
+    (src / "helper.md").write_text(AGENT_MD.replace("調べものを手伝う担当", "リサーチ担当"), encoding="utf-8")
+    assert sync_staff(o)["updated"] == ["ext-helper"]
+    assert o.store.get_bot("ext-helper")["role"] == "リサーチ担当"
+    assert o.store.list_memories("ext-helper")[0]["text"] == "結論から書く"  # 覚えたことは残る
+    (src / "kana" / "STAFF.md").unlink()
+    assert sync_staff(o)["missing"] == ["ext-kana"]
+    kana = o.store.get_bot("ext-kana")
+    assert kana["source_missing"] and kana["paused"]
+
+
+def test_prompt_points_to_external_file_and_does_not_copy_it(tmp_path):
+    from ai_office import config
+    from ai_office.office import sync_staff
+    src = _staff_dir(tmp_path)
+    o = Office(Store(tmp_path / "p.db"), runner_mode="demo", host=config.HostConfig(workdir=tmp_path, staff_dirs=[src]),
+               notifier=None)
+    sync_staff(o)
+    bot = o.store.get_bot("ext-helper")
+    p = protocol.build_prompt(bot, {"instruction": "x"}, [], [], str(tmp_path), "w", [], [])
+    assert str((src / "helper.md").resolve()) in p and "必ず Read" in p
+    assert "秘密の進め方" not in p
+    assert "秘密の進め方" not in json.dumps(o.overview(), ensure_ascii=False)
+
+
+def test_model_is_passed_to_the_cli(monkeypatch, tmp_path):
+    seen = {}
+
+    class FakePopen:
+        def __init__(self, cmd, **kw):
+            seen["cmd"], seen["env"] = cmd, kw["env"]
+            self.returncode, self.pid = 0, 0
+
+        def communicate(self, input=None, timeout=None):
+            return '```ai-office\n{"status":"done","reply":"ok"}\n```', ""
+
+    monkeypatch.setattr(runner.subprocess, "Popen", FakePopen)
+    monkeypatch.delenv("AI_OFFICE_RUNNER_CMD", raising=False)
+    runner.run("p", {"instruction": "x", "title": "x"}, {"id": "b", "role": ""}, tmp_path, mode="claude",
+               model="claude-test-model")
+    assert seen["cmd"][-2:] == ["--model", "claude-test-model"] and seen["env"]["ANTHROPIC_MODEL"] == "claude-test-model"
+    runner.run("p", {"instruction": "x", "title": "x"}, {"id": "b", "role": ""}, tmp_path, mode="claude")
+    assert "--model" not in seen["cmd"]
+
+
+def test_cli_lists_external_staff(tmp_path, monkeypatch, capsys):
+    from ai_office import __main__ as cli
+    src = _staff_dir(tmp_path)
+    local = tmp_path / "local.json"
+    local.write_text(json.dumps({"staff_dirs": [str(src)]}))
+    monkeypatch.setenv("AI_OFFICE_LOCAL_CONFIG", str(local))
+    assert cli.main(["--workdir", str(tmp_path), "staff"]) == 0
+    out = capsys.readouterr().out
+    assert "helper" in out and "kana" in out and "2 人" in out

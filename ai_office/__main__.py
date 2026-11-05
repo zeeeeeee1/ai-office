@@ -10,6 +10,7 @@
   python3 ai-office/office.py install-service --load    # Mac で常駐させる（launchd）
   python3 ai-office/office.py uninstall-service         # 常駐をやめる
   python3 ai-office/office.py skills           # スキルを探す場所と、見つかったスキル（📦=もらったスキル）
+  python3 ai-office/office.py staff            # 外部の AI社員を探す場所と、見つかった AI社員
   python3 ai-office/office.py build-preview    # 1ファイルの画面プレビュー（デモデータ入り）を書き出す
 
 作業ディレクトリと設定ファイルの決め方は ai_office/config.py を参照。
@@ -23,7 +24,7 @@ import sys
 from pathlib import Path
 
 from . import config, runner
-from .office import Office, OfficeError, seed
+from .office import Office, OfficeError, seed, sync_staff
 from .store import WAITING_ON_ME, Store
 
 BASE = config.PKG_DIR
@@ -46,6 +47,10 @@ def _office(args) -> Office:
     host = _host(args)
     office = Office(store, runner_mode=mode, max_parallel=getattr(args, "parallel", 2), host=host)
     seed(office, host.bots_file)
+    synced = sync_staff(office)
+    if any(synced.values()):
+        print(f"[ai-office] 外部の AI社員: 入社 {len(synced['added'])} / 更新 {len(synced['updated'])}"
+              f" / 定義が見つからない {len(synced['missing'])}", file=sys.stderr)
     return office
 
 
@@ -158,6 +163,23 @@ def cmd_skills(args) -> int:
     return 0
 
 
+def cmd_staff(args) -> int:
+    from . import staff as staff_mod
+
+    host = _host(args)
+    local = config.local_config_path()
+    print(f"手元だけの設定: {local}{'' if local.is_file() else '（まだ無い）'}")
+    print("外部の AI社員を探す場所:" if host.staff_dirs else "外部の AI社員を探す場所: なし（staff_dirs を書くと探す）")
+    for d in host.staff_dirs:
+        print(f"  {d}{'' if Path(d).is_dir() else '（無い）'}")
+    found = staff_mod.discover(host.staff_dirs)
+    print(f"見つかった AI社員: {len(found)} 人")
+    for f in found:
+        model = f"・モデル {f['model']}" if f["model"] else ""
+        print(f"  {f['avatar']} {f['name']}（{f['id']}{model}）  {f['source_path']}")
+    return 0
+
+
 def cmd_build_preview(args) -> int:
     from .preview import build
 
@@ -204,6 +226,8 @@ def main(argv=None) -> int:
     s.set_defaults(fn=cmd_uninstall_service)
     s = sub.add_parser("skills", help="スキルを探す場所と、見つかったスキルを表示")
     s.set_defaults(fn=cmd_skills)
+    s = sub.add_parser("staff", help="外部の AI社員を探す場所と、見つかった AI社員を表示")
+    s.set_defaults(fn=cmd_staff)
     s = sub.add_parser("build-preview", help="1ファイルの画面プレビューを書き出す")
     s.add_argument("--out", default=None, help="既定は <作業ディレクトリ>/output/ai-office/preview.html")
     s.set_defaults(fn=cmd_build_preview)

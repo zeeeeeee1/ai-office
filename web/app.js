@@ -100,7 +100,7 @@
   function renderRoster() {
     $('roster').innerHTML = state.data.bots.map(function (b) {
       var st = BOT_STATE[b.state] || BOT_STATE.idle;
-      var sub = b.state === 'working' && b.current_task ? '作業中: ' + b.current_task.title : b.role + '・' + st[0];
+      var sub = b.source_missing ? '⚠ 定義ファイルが見つからない' : b.state === 'working' && b.current_task ? '作業中: ' + b.current_task.title : (b.role || '外部の AI社員') + '・' + st[0];
       return '<button type="button" class="ao-bot' + (b.id === state.selected ? ' active' : '') + '" data-bot="' + esc(b.id) + '" title="' + esc(b.name + '（' + st[0] + '）') + '">'
         + avatar(b, '', true) + '<div><div class="ao-bot-name">' + esc(b.name) + (b.waiting_count ? ' <span class="ao-count">' + b.waiting_count + '</span>' : '') + '</div><div class="ao-bot-sub">' + esc(sub) + '</div></div></button>';
     }).join('');
@@ -164,7 +164,11 @@
     $('profile').innerHTML =
       '<div class="ao-sec"><div style="display:flex;gap:12px;align-items:center;">' + avatar(b, 'lg') + '<div><div class="ao-bot-name" style="font-size:16px;">' + esc(b.name) + '</div><div class="ao-bot-sub">' + esc(b.role) + '</div></div></div>'
       + '<div class="ao-actions"><button class="btn" type="button" id="pause-btn">' + (b.paused ? '仕事を再開させる' : 'お休みさせる') + '</button></div></div>'
-      + '<div class="ao-sec"><h3>仕事の進め方</h3><p>' + esc(b.instructions || '—') + '</p>'
+      + '<div class="ao-sec"><h3>仕事の進め方</h3>'
+      + (b.source_missing ? '<div class="alert alert-bad">定義ファイルが見つからないのでお休みにしています。ファイルを戻すか、置き場所の設定を直してください。</div>' : '')
+      + (b.source_path ? '<p>外にある定義ファイルを、仕事のたびに読んでから動きます（中身はここに写していません）。</p><div class="ao-chips"><span class="ao-chip external" title="' + esc(b.source_path) + '">📄 ' + esc(b.source_path) + '</span></div>'
+        : '<p>' + esc(b.instructions || '—') + '</p>')
+      + (b.model ? '<div class="ao-chips"><span class="ao-chip">モデル: ' + esc(b.model) + '</span></div>' : '')
       + '<div class="ao-chips">' + (b.skill_info || (b.skills || []).map(function (n) { return { name: n, path: 'x', kind: 'project' }; })).map(function (s) {
           if (!s.path) return '<span class="ao-chip missing" title="スキルが見つかりません。置き場所を確かめてください">⚠ ' + esc(s.name) + '（見つからない）</span>';
           if (s.kind === 'external') return '<span class="ao-chip external" title="' + esc(s.path) + '">📦 ' + esc(s.name) + '</span>';

@@ -23,6 +23,10 @@ AI社員オフィスは単体でも、別のプロジェクトにサブモジュ
   notify_command   通知コマンド（配列）。本文は最後の引数として渡る
   skill_dirs       自分のスキルを探すフォルダ（作業ディレクトリからの相対・~ 可）。既定 skills/ と .claude/skills/
   external_skill_dirs  もらったスキルを置くフォルダ。既定はこのフォルダの skills/（中身は git に入らない）
+  staff_dirs       外にある AI社員の定義のフォルダ（中身はコピーせず、仕事のたびにそのファイルを読ませる）
+
+手元だけの設定 ~/.ai-office/config.json（AI_OFFICE_LOCAL_CONFIG で変えられる）にも同じ項目を書ける。
+人ごとに違うパスや、リポジトリに入れたくない場所はこちらに書く。どのリポジトリにも入らない。
 
 スキルは「名前のフォルダ/SKILL.md」の形で置く。同じ名前があれば自分のスキルを先に使う。
 """
@@ -77,7 +81,9 @@ class HostConfig:
     notify_command: Optional[list] = None
     skill_dirs: list = field(default_factory=list)
     external_skill_dirs: list = field(default_factory=lambda: [EXTERNAL_SKILLS_DIR])
+    staff_dirs: list = field(default_factory=list)
     source: Optional[Path] = None
+    sources: list = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if not self.skill_dirs:
@@ -121,30 +127,56 @@ class HostConfig:
             return f"python3 {script}"
 
 
+def local_config_path() -> Path:
+    """手元だけの設定ファイル。どのリポジトリにも入らない場所に置く。"""
+    return Path(os.environ.get("AI_OFFICE_LOCAL_CONFIG") or (Path.home() / ".ai-office" / "config.json")).expanduser()
+
+
 def load(workdir: Path) -> HostConfig:
+    """作業ディレクトリの設定 → 手元だけの設定（~/.ai-office/config.json）の順に読み、後から読んだ方で上書きする。
+
+    手元だけの設定には、人ごとに違うパスや、リポジトリに入れたくない場所（もらったスキル・外部の AI社員）を書く。
+    外部の AI社員とスキルのフォルダは、両方に書いてあれば両方を探す。
+    """
     cfg = HostConfig(workdir=workdir)
+    layers = []
     for rel in CONFIG_CANDIDATES:
         p = workdir / rel
         if p.is_file():
-            data = json.loads(p.read_text("utf-8"))
-            cfg.source = p
+            layers.append((p, json.loads(p.read_text("utf-8")), workdir))
             break
-    else:
-        return cfg
-    if data.get("bots_file"):
-        cfg.bots_file = (workdir / data["bots_file"]).resolve()
-    cfg.workspace_dir = str(data.get("workspace_dir") or cfg.workspace_dir)
-    cfg.house_rules = [str(x) for x in data.get("house_rules", []) if str(x).strip()]
-    if data.get("runner_command"):
-        cfg.runner_command = [os.path.expanduser(str(x)) for x in data["runner_command"]]
-    cfg.runner_env = {str(k): str(v) for k, v in (data.get("runner_env") or {}).items()}
-    if data.get("notify_command"):
-        cfg.notify_command = [str(x) for x in data["notify_command"]]
-    if data.get("skill_dirs"):
-        cfg.skill_dirs = [_path(workdir, x) for x in data["skill_dirs"]]
-    if data.get("external_skill_dirs"):
-        cfg.external_skill_dirs = [_path(workdir, x) for x in data["external_skill_dirs"]]
+    local = local_config_path()
+    if local.is_file():
+        layers.append((local, json.loads(local.read_text("utf-8")), local.parent))
+    for src, data, base in layers:
+        cfg.sources.append(src)
+        if data.get("bots_file"):
+            cfg.bots_file = _path(base, data["bots_file"])
+        if data.get("workspace_dir"):
+            cfg.workspace_dir = str(data["workspace_dir"])
+        cfg.house_rules += [str(x) for x in data.get("house_rules", []) if str(x).strip()]
+        if data.get("runner_command"):
+            cfg.runner_command = [os.path.expanduser(str(x)) for x in data["runner_command"]]
+        cfg.runner_env.update({str(k): str(v) for k, v in (data.get("runner_env") or {}).items()})
+        if data.get("notify_command"):
+            cfg.notify_command = [str(x) for x in data["notify_command"]]
+        if data.get("skill_dirs"):
+            cfg.skill_dirs = [_path(base, x) for x in data["skill_dirs"]]
+        if data.get("external_skill_dirs"):
+            extra = [_path(base, x) for x in data["external_skill_dirs"]]
+            cfg.external_skill_dirs = extra if src != local else _merge(cfg.external_skill_dirs, extra)
+        if data.get("staff_dirs"):
+            cfg.staff_dirs = _merge(cfg.staff_dirs, [_path(base, x) for x in data["staff_dirs"]])
+    cfg.source = cfg.sources[0] if cfg.sources else None
     return cfg
+
+
+def _merge(a: list, b: list) -> list:
+    out = list(a)
+    for x in b:
+        if x not in out:
+            out.append(x)
+    return out
 
 
 def _path(workdir: Path, value) -> Path:

@@ -249,7 +249,8 @@ class Office:
 
         try:
             res = runner.run(prompt, task, bot, self.workdir, mode=self.runner_mode, on_start=_on_start,
-                             host_command=self.host.runner_command, host_env=self.host.runner_env)
+                             host_command=self.host.runner_command, host_env=self.host.runner_env,
+                             model=bot.get("model") or None)
         finally:
             self._procs.pop(task["id"], None)
 
@@ -331,6 +332,43 @@ class Office:
 
 def load_seed(path: Path) -> dict:
     return json.loads(Path(path).read_text("utf-8"))
+
+
+def sync_staff(office: Office) -> dict:
+    """外にある AI社員（staff_dirs）を名簿に合わせる。中身はコピーせず、ファイルの場所と見出しだけを持つ。
+
+    - 新しく見つかった人は入社させる
+    - もういる人は、名前・担当・モデル・使うスキル・ファイルの場所を、ファイルの見出しに合わせる
+      （覚えたこと・会話・仕事・お休みはそのまま）
+    - ファイルが無くなった人は「定義が見つからない」にしてお休みにする（消さない）
+    """
+    from . import staff as staff_mod
+
+    found = staff_mod.discover(office.host.staff_dirs)
+    ids = {f["id"] for f in found}
+    result = {"added": [], "updated": [], "missing": []}
+    sort_base = len(office.store.list_bots())
+    for i, f in enumerate(found):
+        bot = office.store.get_bot(f["id"])
+        if not bot:
+            office.store.create_bot(f["name"], f["role"], f["avatar"], "", f["skills"], "slate", bot_id=f["id"],
+                                    sort=sort_base + i, model=f["model"], source_path=f["source_path"])
+            office.store.add_message(f["id"], "bot", f"{f['name']}です。仕事の進め方は {f['source_path']} に書いてあります。")
+            result["added"].append(f["id"])
+            continue
+        changes = {k: f[k] for k in ("name", "role", "model", "skills", "source_path") if bot.get(k) != f[k]}
+        if bot.get("source_missing"):
+            changes["source_missing"] = False
+        if changes:
+            office.store.update_bot(f["id"], **changes)
+            result["updated"].append(f["id"])
+    for bot in office.store.list_bots():
+        if bot.get("source_path") and bot["id"] not in ids and not bot.get("source_missing"):
+            office.store.update_bot(bot["id"], source_missing=True, paused=True)
+            office.store.log_event("staff_missing", f"{bot['name']} の定義ファイルが見つからないのでお休みにしました"
+                                   f"（{bot['source_path']}）", bot_id=bot["id"])
+            result["missing"].append(bot["id"])
+    return result
 
 
 def seed(office: Office, seed_path: Path) -> list[dict]:
