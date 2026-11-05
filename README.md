@@ -84,6 +84,9 @@ python3 ai-office/office.py serve
 | `notify_command` | 通知コマンド。本文は最後の引数として渡る（Slack・メールなどへの送り方はプロジェクト側で用意する） |
 | `skill_dirs` | 自分のスキルを探すフォルダ（既定 `skills/` と `.claude/skills/`） |
 | `external_skill_dirs` | もらったスキルを置くフォルダ（既定はこのリポジトリの `skills/`） |
+| `staff_dirs` | 外にある AI社員の定義のフォルダ（コピーせず、仕事のたびに読ませる） |
+
+同じ項目は、手元だけの設定 `~/.ai-office/config.json`（`AI_OFFICE_LOCAL_CONFIG` で場所を変えられる）にも書けます。両方にあるときは手元だけの設定が後から効き、`staff_dirs` と `external_skill_dirs` は両方の場所を探します。
 
 ## もらったスキルを使う
 
@@ -104,6 +107,43 @@ python3 office.py skills
 ```
 
 で、探す場所と見つかったスキルを確かめられます。入れる前には中身を読んで、知らない送信先へのアクセスや削除などの危ない操作が無いかを確かめてください。
+
+## 外にある AI社員を使う
+
+ほかの場所に置いてある AI社員の定義（Claude Code のエージェントのファイルなど）を、**コピーせずにそのまま**使えます。
+AI社員オフィスが持つのは名前・説明・モデル・使うスキル・ファイルの場所だけで、仕事の進め方は仕事のたびに AI社員（Claude）にそのファイルを読ませます。
+
+置き方は次のどちらかです。
+
+```
+<フォルダ>/<名前>.md          Claude Code のエージェントと同じ形のファイル
+<フォルダ>/<名前>/STAFF.md    1人1フォルダ（references/ や templates/ を横に置ける）
+```
+
+ファイルの先頭に見出しがあれば使います（無くても動きます）。
+
+```
+---
+name: researcher
+description: 調べものの担当
+model: （使うモデル。書かなければ CLI の既定）
+skills: [skill-a, skill-b]
+---
+```
+
+場所は **手元だけの設定ファイル `~/.ai-office/config.json`** に書きます。このファイルはどのリポジトリにも入らないので、人ごとに違うパスや、リポジトリに入れたくない場所（もらったスキル・もらった AI社員）を書いても公開されません。
+
+```json
+{
+  "staff_dirs": ["~/path/to/agents"],
+  "external_skill_dirs": ["~/path/to/skills"]
+}
+```
+
+- 起動のたびにフォルダを読み直し、新しい人は入社させ、もういる人は名前・説明・モデル・使うスキルをファイルに合わせます。覚えたこと・会話・仕事は消えません。
+- 定義ファイルが無くなった人は消さずに「定義が見つからない」にして、お休みにします。
+- `python3 office.py staff` で、探す場所と見つかった AI社員を確かめられます。
+- 使うモデルを見出しに書くと、`claude --model` で動かします（opencode では `--model`、ほかの CLI には環境変数 `AI_OFFICE_MODEL` で渡します）。
 
 ## 画面を開かずに操作する
 
@@ -163,6 +203,7 @@ AI社員は返事の最後に ` ```ai-office ` の JSON ブロックを書く決
 | `web/` | 画面（`index.html` / `app.js` / `app.css`）と共通部品 `web/ui-kit/`（配色トークン・タブ・カード・表・バッジ。ほかの管理画面からも読み込める） |
 | `skills/` | もらったスキルの置き場所（中身は git に入らない） |
 | `examples/` | 初期メンバーと設定ファイルの例 |
+| `docs/FEATURES.md` | 機能一覧（できること・できないこと・確かめているテスト） |
 | `data/office.db` | 会話・仕事の記録（SQLite・git 管理外） |
 | `tests/` | テスト（`python3 -m pytest tests`） |
 

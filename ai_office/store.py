@@ -38,6 +38,9 @@ CREATE TABLE IF NOT EXISTS bots (
   instructions TEXT NOT NULL DEFAULT '',
   skills TEXT NOT NULL DEFAULT '[]',
   hints TEXT NOT NULL DEFAULT '[]',
+  model TEXT NOT NULL DEFAULT '',
+  source_path TEXT NOT NULL DEFAULT '',
+  source_missing INTEGER NOT NULL DEFAULT 0,
   paused INTEGER NOT NULL DEFAULT 0,
   sort INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL
@@ -113,8 +116,9 @@ def _row(r: Optional[sqlite3.Row]) -> Optional[dict]:
     for key in ("approval", "approved"):
         if key in d and isinstance(d[key], str) and d[key]:
             d[key] = json.loads(d[key])
-    if "paused" in d:
-        d["paused"] = bool(d["paused"])
+    for key in ("paused", "source_missing"):
+        if key in d:
+            d[key] = bool(d[key])
     if "enabled" in d:
         d["enabled"] = bool(d["enabled"])
     return d
@@ -133,8 +137,11 @@ class Store:
         self._db.execute("PRAGMA journal_mode=WAL" if self.path != ":memory:" else "PRAGMA journal_mode=MEMORY")
         self._db.executescript(SCHEMA)
         cols = {r[1] for r in self._db.execute("PRAGMA table_info(bots)").fetchall()}
-        if "hints" not in cols:  # 古いデータベースに列を足す
-            self._db.execute("ALTER TABLE bots ADD COLUMN hints TEXT NOT NULL DEFAULT '[]'")
+        for col, ddl in (("hints", "TEXT NOT NULL DEFAULT '[]'"), ("model", "TEXT NOT NULL DEFAULT ''"),
+                         ("source_path", "TEXT NOT NULL DEFAULT ''"),
+                         ("source_missing", "INTEGER NOT NULL DEFAULT 0")):
+            if col not in cols:  # 古いデータベースに列を足す
+                self._db.execute(f"ALTER TABLE bots ADD COLUMN {col} {ddl}")
         self._db.commit()
 
     # ---- 低レベル ----
@@ -155,14 +162,15 @@ class Store:
     # ---- AI社員 ----
     def create_bot(self, name: str, role: str = "", avatar: str = "🤖", instructions: str = "",
                    skills: Optional[list[str]] = None, color: str = "indigo", bot_id: Optional[str] = None,
-                   sort: int = 0, hints: Optional[list[str]] = None) -> dict:
+                   sort: int = 0, hints: Optional[list[str]] = None, model: str = "",
+                   source_path: str = "") -> dict:
         bot_id = bot_id or uuid.uuid4().hex[:8]
         self._exec(
-            "INSERT INTO bots (id, name, role, avatar, color, instructions, skills, hints, sort, created_at)"
-            " VALUES (?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO bots (id, name, role, avatar, color, instructions, skills, hints, model, source_path,"
+            " sort, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
             (bot_id, name.strip(), role.strip(), avatar or "🤖", color, instructions.strip(),
              json.dumps(skills or [], ensure_ascii=False), json.dumps(hints or [], ensure_ascii=False),
-             sort, now_iso()),
+             model or "", source_path or "", sort, now_iso()),
         )
         self.log_event("bot_created", f"{name} が入社しました", bot_id=bot_id)
         return self.get_bot(bot_id)
@@ -174,14 +182,15 @@ class Store:
         return self._all("SELECT * FROM bots ORDER BY sort, created_at")
 
     def update_bot(self, bot_id: str, **fields: Any) -> Optional[dict]:
-        allowed = {"name", "role", "avatar", "color", "instructions", "skills", "hints", "paused"}
+        allowed = {"name", "role", "avatar", "color", "instructions", "skills", "hints", "paused", "model",
+                   "source_path", "source_missing"}
         sets, params = [], []
         for k, v in fields.items():
             if k not in allowed:
                 continue
             if k in ("skills", "hints"):
                 v = json.dumps(list(v), ensure_ascii=False)
-            if k == "paused":
+            if k in ("paused", "source_missing"):
                 v = 1 if v else 0
             sets.append(f"{k}=?")
             params.append(v)

@@ -98,7 +98,8 @@ def stop_process(proc: subprocess.Popen) -> None:
 def run(prompt: str, task: dict, bot: dict, workdir: Path, mode: Optional[str] = None,
         timeout: int = DEFAULT_TIMEOUT,
         on_start: Optional[Callable[[subprocess.Popen], None]] = None,
-        host_command: Optional[list] = None, host_env: Optional[dict] = None) -> RunResult:
+        host_command: Optional[list] = None, host_env: Optional[dict] = None,
+        model: Optional[str] = None) -> RunResult:
     """CLI を1回動かす。on_start には起動したプロセスが渡る（途中で止めるため）。"""
     mode = resolve_mode(mode, host_command)
     if mode == "demo":
@@ -109,6 +110,13 @@ def run(prompt: str, task: dict, bot: dict, workdir: Path, mode: Optional[str] =
         return RunResult(ok=False, output="", error=str(e))
     env = {k: v for k, v in os.environ.items() if k not in BLOCKED_ENV}
     env["AI_OFFICE_WORKDIR"] = str(workdir)
+    if model:  # 社員ごとのモデル。claude はオプションで、ほかの CLI には環境変数で渡す
+        env["AI_OFFICE_MODEL"] = model
+        env["ANTHROPIC_MODEL"] = model
+        if mode == "claude":
+            cmd = [*cmd, "--model", model]
+        elif mode == "opencode":
+            cmd = [cmd[0], cmd[1], "--model", model, *cmd[2:]]
     for k, v in (host_env or {}).items():
         if k not in BLOCKED_ENV:
             env[k] = v.replace("{workdir}", str(workdir)).replace("{timeout}", str(timeout))

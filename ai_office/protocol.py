@@ -33,6 +33,14 @@ def _skill_line(info: dict) -> str:
     return f"- `{info['name']}` → `{info['path']}`（{label}。使う前にこのファイルを読む）"
 
 
+def _instructions(bot: dict) -> str:
+    src = bot.get("source_path")
+    if src:  # 外にある定義。中身は写さず、場所だけ渡して読ませる
+        return (f"次のファイルに書いてある。作業を始める前に必ず Read し、その内容に全面的に従うこと: `{src}`\n"
+                "そのファイルが別のファイル（`@パス` や「次のファイルを読む」）を指していれば、それも読む。")
+    return bot.get("instructions") or "任された仕事を最後までやり切る。"
+
+
 def build_prompt(bot: dict, task: dict, memories: list[dict], history: list[dict], workdir: str,
                  workspace: str, house_rules: Optional[list] = None,
                  skill_info: Optional[list] = None) -> str:
@@ -62,7 +70,7 @@ def build_prompt(bot: dict, task: dict, memories: list[dict], history: list[dict
 同僚として本人から仕事を任されています。作業はこの作業ディレクトリ（{workdir}）の中で行います。
 
 ## あなたの仕事の進め方
-{bot.get('instructions') or '任された仕事を最後までやり切る。'}
+{_instructions(bot)}
 
 ## 使ってよいスキル
 {skill_lines}
