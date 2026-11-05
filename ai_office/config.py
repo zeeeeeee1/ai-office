@@ -21,17 +21,24 @@ AI社員オフィスは単体でも、別のプロジェクトにサブモジュ
   runner_command   LLM CLI の起動コマンド（配列・指示書は標準入力）。先頭のファイルが無ければ自動選択に戻る
   runner_env       CLI に渡す環境変数。値の {workdir} {timeout} は置き換わる
   notify_command   通知コマンド（配列）。本文は最後の引数として渡る
+  skill_dirs       自分のスキルを探すフォルダ（作業ディレクトリからの相対・~ 可）。既定 skills/ と .claude/skills/
+  external_skill_dirs  もらったスキルを置くフォルダ。既定はこのフォルダの skills/（中身は git に入らない）
+
+スキルは「名前のフォルダ/SKILL.md」の形で置く。同じ名前があれば自分のスキルを先に使う。
 """
 from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
 PKG_DIR = Path(__file__).resolve().parents[1]
 EXAMPLE_BOTS = PKG_DIR / "examples" / "bots.example.json"
+EXTERNAL_SKILLS_DIR = PKG_DIR / "skills"
+SKILL_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 CONFIG_CANDIDATES = ("config/ai_office.json", "ai_office.json")
 
 
@@ -67,7 +74,41 @@ class HostConfig:
     runner_command: Optional[list] = None
     runner_env: dict = field(default_factory=dict)
     notify_command: Optional[list] = None
+    skill_dirs: list = field(default_factory=list)
+    external_skill_dirs: list = field(default_factory=lambda: [EXTERNAL_SKILLS_DIR])
     source: Optional[Path] = None
+
+    def __post_init__(self) -> None:
+        if not self.skill_dirs:
+            self.skill_dirs = [self.workdir / "skills", self.workdir / ".claude" / "skills"]
+
+    def find_skill(self, name: str) -> dict:
+        """スキル名から SKILL.md を探す。自分のスキル → もらったスキルの順。"""
+        name = str(name).strip()
+        if not SKILL_NAME_RE.match(name):
+            return {"name": name, "path": None, "kind": None}
+        for kind, dirs in (("project", self.skill_dirs), ("external", self.external_skill_dirs)):
+            for d in dirs:
+                f = Path(d) / name / "SKILL.md"
+                if f.is_file():
+                    return {"name": name, "path": str(f), "kind": kind}
+        return {"name": name, "path": None, "kind": None}
+
+    def list_skills(self) -> list:
+        """探す場所にあるスキルを全部並べる（同じ名前は先に見つかった方だけ）。"""
+        seen, out = set(), []
+        for kind, dirs in (("project", self.skill_dirs), ("external", self.external_skill_dirs)):
+            for d in dirs:
+                d = Path(d)
+                if not d.is_dir():
+                    continue
+                for f in sorted(d.glob("*/SKILL.md")):
+                    name = f.parent.name
+                    if name in seen or not SKILL_NAME_RE.match(name):
+                        continue
+                    seen.add(name)
+                    out.append({"name": name, "path": str(f), "kind": kind})
+        return out
 
     def office_cli(self) -> str:
         """通知に載せるコマンドの書き方（作業ディレクトリから打てる形）。"""
@@ -98,4 +139,13 @@ def load(workdir: Path) -> HostConfig:
     cfg.runner_env = {str(k): str(v) for k, v in (data.get("runner_env") or {}).items()}
     if data.get("notify_command"):
         cfg.notify_command = [str(x) for x in data["notify_command"]]
+    if data.get("skill_dirs"):
+        cfg.skill_dirs = [_path(workdir, x) for x in data["skill_dirs"]]
+    if data.get("external_skill_dirs"):
+        cfg.external_skill_dirs = [_path(workdir, x) for x in data["external_skill_dirs"]]
     return cfg
+
+
+def _path(workdir: Path, value) -> Path:
+    p = Path(os.path.expanduser(str(value)))
+    return p if p.is_absolute() else (workdir / p).resolve()

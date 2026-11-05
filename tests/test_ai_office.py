@@ -1,6 +1,7 @@
 """AI社員オフィスのテスト。LLM は呼ばない（runner=demo / 差し替え）。"""
 import json
 import re
+import subprocess
 import sys
 import threading
 import time
@@ -418,3 +419,63 @@ def test_preview_builds_single_file(tmp_path):
     out = build(SEED, tmp_path / "p.html")
     page = out.read_text("utf-8")
     assert "window.AI_OFFICE_DEMO = true" in page and "--ce-bg" in page and "<!DOCTYPE" not in page
+
+
+# ---------- もらったスキルの置き場所 ----------
+def _skill(d: Path, name: str) -> Path:
+    (d / name).mkdir(parents=True)
+    f = d / name / "SKILL.md"
+    f.write_text(f"# {name}\n")
+    return f
+
+
+def test_received_skills_folder_exists_and_is_not_committed():
+    gi = (ROOT / "skills" / ".gitignore").read_text("utf-8").split()
+    assert "*" in gi and "!README.md" in gi and "!.gitignore" in gi
+    tracked = subprocess.run(["git", "-C", str(ROOT), "ls-files", "skills"], capture_output=True, text=True).stdout.split()
+    assert set(tracked) <= {"skills/README.md", "skills/.gitignore"}
+
+
+def test_find_skill_prefers_project_then_received(tmp_path):
+    from ai_office import config
+    own, got = tmp_path / "skills", tmp_path / "received"
+    _skill(own, "blog")
+    _skill(got, "blog")
+    recv = _skill(got, "shared-skill")
+    host = config.HostConfig(workdir=tmp_path, skill_dirs=[own], external_skill_dirs=[got])
+    assert host.find_skill("blog")["kind"] == "project"
+    assert host.find_skill("shared-skill") == {"name": "shared-skill", "path": str(recv), "kind": "external"}
+    assert host.find_skill("nothing")["path"] is None
+    assert host.find_skill("../etc")["path"] is None  # フォルダの外は見ない
+    assert [s["name"] for s in host.list_skills()] == ["blog", "shared-skill"]
+
+
+def test_skill_dirs_can_be_set_in_config(tmp_path):
+    from ai_office import config
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "ai_office.json").write_text(json.dumps({
+        "skill_dirs": ["my-skills"], "external_skill_dirs": [str(tmp_path / "gift")]}))
+    _skill(tmp_path / "gift", "present")
+    host = config.load(tmp_path)
+    assert host.skill_dirs == [(tmp_path / "my-skills").resolve()]
+    assert host.find_skill("present")["kind"] == "external"
+
+
+def test_prompt_and_overview_show_skill_paths(tmp_path):
+    from ai_office import config
+    recv = _skill(tmp_path / "gift", "present")
+    host = config.HostConfig(workdir=tmp_path, skill_dirs=[tmp_path / "none"], external_skill_dirs=[tmp_path / "gift"])
+    o = Office(Store(tmp_path / "s.db"), runner_mode="demo", host=host, notifier=None)
+    o.store.create_bot("テスト", "検証", skills=["present", "missing"], bot_id="t1")
+    info = [b for b in o.overview()["bots"] if b["id"] == "t1"][0]["skill_info"]
+    assert info[0]["kind"] == "external" and info[1]["path"] is None
+    p = protocol.build_prompt(o.store.get_bot("t1"), {"instruction": "x"}, [], [], str(tmp_path), "w", [], info)
+    assert str(recv) in p and "もらったスキル" in p and "見つからない" in p
+
+
+def test_cli_lists_skills(tmp_path, monkeypatch, capsys):
+    from ai_office import __main__ as cli
+    _skill(tmp_path / "skills", "mine")
+    assert cli.main(["--workdir", str(tmp_path), "skills"]) == 0
+    out = capsys.readouterr().out
+    assert "mine" in out and "もらったスキルを置く場所" in out

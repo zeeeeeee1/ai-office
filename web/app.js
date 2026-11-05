@@ -165,7 +165,11 @@
       '<div class="ao-sec"><div style="display:flex;gap:12px;align-items:center;">' + avatar(b, 'lg') + '<div><div class="ao-bot-name" style="font-size:16px;">' + esc(b.name) + '</div><div class="ao-bot-sub">' + esc(b.role) + '</div></div></div>'
       + '<div class="ao-actions"><button class="btn" type="button" id="pause-btn">' + (b.paused ? '仕事を再開させる' : 'お休みさせる') + '</button></div></div>'
       + '<div class="ao-sec"><h3>仕事の進め方</h3><p>' + esc(b.instructions || '—') + '</p>'
-      + '<div class="ao-chips">' + (b.skills || []).map(function (s) { return '<span class="ao-chip">' + esc(s) + '</span>'; }).join('') + '</div></div>'
+      + '<div class="ao-chips">' + (b.skill_info || (b.skills || []).map(function (n) { return { name: n, path: 'x', kind: 'project' }; })).map(function (s) {
+          if (!s.path) return '<span class="ao-chip missing" title="スキルが見つかりません。置き場所を確かめてください">⚠ ' + esc(s.name) + '（見つからない）</span>';
+          if (s.kind === 'external') return '<span class="ao-chip external" title="' + esc(s.path) + '">📦 ' + esc(s.name) + '</span>';
+          return '<span class="ao-chip" title="' + esc(s.path) + '">' + esc(s.name) + '</span>';
+        }).join('') + '</div></div>'
       + '<div class="ao-sec"><h3>覚えていること <span class="ao-count" data-zero="' + (mem.length ? 0 : 1) + '">' + mem.length + '</span></h3>'
       + (mem.length ? '<ul class="ao-mem">' + mem.map(function (m) { return '<li><span>' + esc(m.text) + '</span><button class="ao-x" type="button" title="忘れさせる" aria-label="忘れさせる" data-forget="' + m.id + '">×</button></li>'; }).join('') + '</ul>'
         : '<div class="ao-empty">仕事をするたびに、あなたの好みや進め方を覚えていきます。</div>')

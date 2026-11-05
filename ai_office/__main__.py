@@ -9,6 +9,7 @@
   python3 ai-office/office.py cancel 12        # 取り消す（作業中なら止める）
   python3 ai-office/office.py install-service --load    # Mac で常駐させる（launchd）
   python3 ai-office/office.py uninstall-service         # 常駐をやめる
+  python3 ai-office/office.py skills           # スキルを探す場所と、見つかったスキル（📦=もらったスキル）
   python3 ai-office/office.py build-preview    # 1ファイルの画面プレビュー（デモデータ入り）を書き出す
 
 作業ディレクトリと設定ファイルの決め方は ai_office/config.py を参照。
@@ -122,6 +123,21 @@ def cmd_uninstall_service(args) -> int:
     return 0
 
 
+def cmd_skills(args) -> int:
+    host = _host(args)
+    print("自分のスキルを探す場所:")
+    for d in host.skill_dirs:
+        print(f"  {d}{'' if Path(d).is_dir() else '（無い）'}")
+    print("もらったスキルを置く場所:")
+    for d in host.external_skill_dirs:
+        print(f"  {d}{'' if Path(d).is_dir() else '（無い）'}")
+    found = host.list_skills()
+    print(f"見つかったスキル: {len(found)} 個")
+    for s in found:
+        print(f"  {'📦' if s['kind'] == 'external' else '  '} {s['name']}  {s['path']}")
+    return 0
+
+
 def cmd_build_preview(args) -> int:
     from .preview import build
 
@@ -162,6 +178,8 @@ def main(argv=None) -> int:
     s.set_defaults(fn=cmd_install_service)
     s = sub.add_parser("uninstall-service", help="常駐をやめて plist を外す")
     s.set_defaults(fn=cmd_uninstall_service)
+    s = sub.add_parser("skills", help="スキルを探す場所と、見つかったスキルを表示")
+    s.set_defaults(fn=cmd_skills)
     s = sub.add_parser("build-preview", help="1ファイルの画面プレビューを書き出す")
     s.add_argument("--out", default=None, help="既定は <作業ディレクトリ>/output/ai-office/preview.html")
     s.set_defaults(fn=cmd_build_preview)

@@ -134,6 +134,7 @@ class Office:
             b["waiting_count"] = len(waiting)
             b["queued_count"] = len([t for t in mine if t["status"] == "queued"])
             b["memories"] = self.store.list_memories(b["id"])
+            b["skill_info"] = [self.host.find_skill(n) for n in b.get("skills") or []]
         schedules = self.store.list_schedules()
         for s in schedules:
             try:
@@ -235,7 +236,8 @@ class Office:
                              bot_id=bot["id"], task_id=task["id"])
         history = [m for m in self.store.list_messages(bot["id"], limit=30)]
         prompt = protocol.build_prompt(bot, task, self.store.list_memories(bot["id"]), history,
-                                       str(self.workdir), str(workspace), self.host.house_rules)
+                                       str(self.workdir), str(workspace), self.host.house_rules,
+                                       [self.host.find_skill(n) for n in bot.get("skills") or []])
         if self.store.get_task(task["id"])["status"] == "cancelled":  # 着手前に止められた
             return self.store.get_task(task["id"])
 

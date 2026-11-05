@@ -7,5 +7,7 @@
   ],
   "runner_command": ["claude", "-p", "--output-format", "text"],
   "runner_env": {},
-  "notify_command": ["python3", "scripts/notify.py", "--text"]
+  "notify_command": ["python3", "scripts/notify.py", "--text"],
+  "skill_dirs": ["skills", ".claude/skills"],
+  "external_skill_dirs": ["ai-office/skills"]
 }
