@@ -22,7 +22,7 @@ EXTRA_PATHS = ["~/.opencode/bin", "~/.local/bin", "~/.claude/local", "/opt/homeb
 
 
 def build_plist(workdir: Path, python: str = sys.executable, port: int = 8765,
-                path_env: str | None = None) -> dict:
+                path_env: str | None = None, allow_broad: bool = False) -> dict:
     paths: list[str] = []
     for p in (path_env if path_env is not None else os.environ.get("PATH", "")).split(":") + EXTRA_PATHS:
         p = os.path.expanduser(p)
@@ -33,7 +33,8 @@ def build_plist(workdir: Path, python: str = sys.executable, port: int = 8765,
     env.update({k: v for k, v in os.environ.items() if k.startswith("AI_OFFICE_") and k != "AI_OFFICE_SERVICE_LABEL"})
     return {
         "Label": LABEL,
-        "ProgramArguments": [python, str(PKG_DIR / "office.py"), "--workdir", str(workdir), "serve", "--port", str(port)],
+        "ProgramArguments": [python, str(PKG_DIR / "office.py"), "--workdir", str(workdir), "serve", "--port", str(port),
+                             *(["--allow-broad-workdir"] if allow_broad else [])],
         "WorkingDirectory": str(workdir),
         "EnvironmentVariables": env,
         "RunAtLoad": True,
@@ -49,8 +50,9 @@ def plist_path() -> Path:
     return AGENTS_DIR / f"{LABEL}.plist"
 
 
-def install(workdir: Path, port: int = 8765, load: bool = False, dry_run: bool = False) -> str:
-    data = build_plist(workdir, port=port)
+def install(workdir: Path, port: int = 8765, load: bool = False, dry_run: bool = False,
+            allow_broad: bool = False) -> str:
+    data = build_plist(workdir, port=port, allow_broad=allow_broad)
     raw = plistlib.dumps(data).decode("utf-8")
     if dry_run:
         return raw
